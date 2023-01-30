@@ -1,8 +1,7 @@
-import shutil
-
-from pydub import AudioSegment
-from aiohttp import ClientSession
 from uuid import uuid4
+
+from aiohttp import ClientSession
+from pydub import AudioSegment
 
 
 def ogg_to_wav(source: str) -> str:

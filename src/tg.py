@@ -25,11 +25,11 @@ class Telegram:
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Ask me anything...'
+            text='напиши мне что-нибудь... можно и голосовухой......'
         )
 
     async def talk_with_ai(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str = None):
-        await self.send(update, context, 'Let me think...')
+        await self.send(update, context, 'дай подумать...')
         msg = f'{text}?' if text else update.message.text
         ai_response, url = await asyncio.gather(
             self.ai.complete(msg),
@@ -47,10 +47,10 @@ class Telegram:
             audio = self.recognizer.record(source)
         try:
             text = self.recognizer.recognize_google(audio, language='ru-RU')
-            await self.send(update, context, f'So, you just say:\n\n{text}')
+            await self.send(update, context, f'так, ты только что сказал:\n\n{text}')
             await self.talk_with_ai(update, context, text)
         except UnknownValueError:
-            await self.send(update, context, 'What did you say?\nRepeat, please')
+            await self.send(update, context, 'что ты сказал?\nне понял, повтори, плиз')
 
     @staticmethod
     async def send(update: Update, context: ContextTypes.DEFAULT_TYPE, response: str):
