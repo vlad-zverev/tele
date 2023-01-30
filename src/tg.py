@@ -1,3 +1,4 @@
+import asyncio
 from uuid import uuid4
 
 from speech_recognition import Recognizer, AudioFile, UnknownValueError
@@ -22,12 +23,20 @@ class Telegram:
 
     @staticmethod
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await context.bot.send_message(chat_id=update.effective_chat.id, text='Ask me anything...')
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Ask me anything...'
+        )
 
     async def talk_with_ai(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str = None):
         await self.send(update, context, 'Let me think...')
-        ai_response = await self.ai.complete(f'{text}?' if text else update.message.text)
+        msg = f'{text}?' if text else update.message.text
+        ai_response, url = await asyncio.gather(
+            self.ai.complete(msg),
+            self.ai.image(request=msg),
+        )
         await self.send(update, context, ai_response)
+        await context.bot.send_photo(update.effective_chat.id, url)
 
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         path = f'voices/voice-{uuid4()}.ogg'
@@ -38,11 +47,10 @@ class Telegram:
             audio = self.recognizer.record(source)
         try:
             text = self.recognizer.recognize_google(audio, language='ru-RU')
-            response = f'So you just say:\n\n{text}'
+            await self.send(update, context, f'So, you just say:\n\n{text}')
+            await self.talk_with_ai(update, context, text)
         except UnknownValueError:
-            response = 'What did you say?\nRepeat, please'
-        await self.send(update, context, response)
-        await self.talk_with_ai(update, context, text)
+            await self.send(update, context, 'What did you say?\nRepeat, please')
 
     @staticmethod
     async def send(update: Update, context: ContextTypes.DEFAULT_TYPE, response: str):
