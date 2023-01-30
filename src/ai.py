@@ -11,7 +11,7 @@ class AI:
 
     async def complete(
             self, text: str,
-            max_tokens: int = 1000,
+            max_tokens: int = 1500,
             temperature: float = 0.6,
     ) -> str:
         response = await openai.Completion.acreate(
