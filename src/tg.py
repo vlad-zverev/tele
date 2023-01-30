@@ -1,6 +1,7 @@
 import asyncio
 from uuid import uuid4
 
+import openai
 from speech_recognition import Recognizer, AudioFile, UnknownValueError
 from telegram import Update, File, Message
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
@@ -55,7 +56,10 @@ class Telegram:
         await greeting.delete()
         await sticker.delete()
         await self.send(update, context, ai_response)
-        await context.bot.send_photo(update.effective_chat.id, url)
+        if isinstance(url, str):
+            await context.bot.send_photo(update.effective_chat.id, url)
+        elif isinstance(url, openai.ErrorObject):
+            await self.send(update, context, url)
 
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         path = f'voices/voice-{uuid4()}.ogg'
