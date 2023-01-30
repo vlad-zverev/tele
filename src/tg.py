@@ -26,7 +26,7 @@ class Telegram:
 
     async def talk_with_ai(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str = None):
         await self.send(update, context, 'Let me think...')
-        ai_response = await self.ai.complete(text or update.message.text)
+        ai_response = await self.ai.complete(f'{text}?' or update.message.text)
         await self.send(update, context, ai_response)
 
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -42,7 +42,7 @@ class Telegram:
         except UnknownValueError:
             response = 'What did you say?\nRepeat, please'
         await self.send(update, context, response)
-        await self.talk_with_ai(update, context, response)
+        await self.talk_with_ai(update, context, text)
 
     @staticmethod
     async def send(update: Update, context: ContextTypes.DEFAULT_TYPE, response: str):
