@@ -1,13 +1,57 @@
 import asyncio
+import logging
 from uuid import uuid4
 
 import openai
 from speech_recognition import Recognizer, AudioFile, UnknownValueError
-from telegram import Update, File, Message
+from telegram import Update, File, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 from .ai import AI
 from .utils import ogg_to_wav, convert_image
+from typing import Any
+import json
+from enum import Enum
+
+
+class State(Enum):
+    START = 'start'
+    CONVERSATION = 'conversation'
+
+
+class SessionsHandler:
+    def __init__(self):
+        self.sessions: dict[int, dict] = {}
+        self.save_sessions()
+        self.load_sessions()
+
+    def get_session(self, user_id: int):
+        if user_id not in self.sessions:
+            self.sessions[user_id] = {
+                'state': State.START.value,
+                'data': {},
+            }
+        return self.sessions[user_id]
+
+    def update_session(self, user_id: int, state: State, data: Any):
+        self.sessions[user_id] = {
+            'state': state,
+            'data': data
+        }
+
+    def delete_session(self, user_id: int):
+        if user_id in self.sessions:
+            del self.sessions[user_id]
+
+    def save_sessions(self, file_name: str = 'sessions.json'):
+        with open(file_name, 'w+') as f:
+            if self.sessions:
+                json.dump(self.sessions, f)
+
+    def load_sessions(self, file_name: str = 'sessions.json'):
+        with open(file_name, 'r') as f:
+            if f.buffer.read():
+                self.sessions = json.load(f)
 
 
 class Telegram:
@@ -15,11 +59,13 @@ class Telegram:
         self.ai = ai
         self.recognizer = Recognizer()
         self.bot = ApplicationBuilder().token(token).build()
+        self.sessions_handler = SessionsHandler()
         for handler in [
             CommandHandler('start', self.start),
+            MessageHandler(filters.TEXT & filters.Regex('забудь всё'), self.forget),
             MessageHandler(filters.TEXT & (~filters.COMMAND), self.talk_with_ai),
             MessageHandler(filters.VOICE, self.handle_voice),
-            MessageHandler(filters.PHOTO, self.handle_image)
+            MessageHandler(filters.PHOTO, self.handle_image),
         ]:
             self.bot.add_handler(handler)
         self.thinking_sticker = 'CAACAgIAAxkBAAEcjy1j15qLCzHw8fZwiTOHzcs9-O_-mgACGAADwDZPE9b6J7-cahj4LQQ'
@@ -30,6 +76,10 @@ class Telegram:
             chat_id=update.effective_chat.id,
             text='напиши мне что-нибудь... можно и голосовухой......'
         )
+
+    async def forget(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        self.sessions_handler.delete_session(update.effective_chat.id)
+        await self.send(update, context, 'ладно...... забыл про тебя')
 
     async def handle_image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         await self.send(update, context, 'обрабатываю пикчу.....')
@@ -46,20 +96,29 @@ class Telegram:
         await context.bot.send_photo(update.effective_chat.id, url)
 
     async def talk_with_ai(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str = None):
+        msg = text or update.message.text
+        state = self.sessions_handler.get_session(update.effective_chat.id)
+        if state['state'] == State.CONVERSATION.value:
+            msg = state['data']['dialogue'][-500:] + f'\n{msg}'
         greeting = await self.send(update, context, 'дай подумать...')
         sticker = await context.bot.send_sticker(update.effective_chat.id, self.thinking_sticker)
-        msg = f'{text}?' if text else update.message.text
         ai_response, url = await asyncio.gather(
             self.ai.complete(msg),
             self.ai.image(request=msg),
         )
-        await greeting.delete()
-        await sticker.delete()
-        await self.send(update, context, ai_response)
+        state['state'] = State.CONVERSATION.value
+        state['data']['dialogue'] = f'{msg}\n{ai_response}'
+        self.sessions_handler.save_sessions()
+        logging.info(state)
+        await asyncio.gather(
+            greeting.delete(),
+            sticker.delete(),
+            self.send(update, context, ai_response),
+        )
         if isinstance(url, str):
             await context.bot.send_photo(update.effective_chat.id, url)
         elif isinstance(url, openai.ErrorObject):
-            await self.send(update, context, url)
+            await self.send(update, context, str(url))
 
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         path = f'voices/voice-{uuid4()}.ogg'
@@ -82,8 +141,13 @@ class Telegram:
         return file
 
     @staticmethod
-    async def send(update: Update, context: ContextTypes.DEFAULT_TYPE, response: str) -> Message:
-        return await context.bot.send_message(update.effective_chat.id, response)
+    async def send(
+            update: Update, context: ContextTypes.DEFAULT_TYPE,
+            response: str, keyboard: ReplyKeyboardMarkup = None,
+    ) -> Message:
+        if not keyboard:
+            keyboard = ReplyKeyboardMarkup([['забудь всё']])
+        return await context.bot.send_message(update.effective_chat.id, response, reply_markup=keyboard)
 
     def run(self):
         self.bot.run_polling()

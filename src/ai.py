@@ -12,7 +12,7 @@ class AI:
 
     async def complete(
             self, text: str,
-            max_tokens: int = 1500,
+            max_tokens: int = 1000,
             temperature: float = 0.6,
     ) -> str:
         try:
