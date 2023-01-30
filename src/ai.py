@@ -25,10 +25,29 @@ class AI:
         return completion
 
     @staticmethod
-    async def image(request: str):
+    async def image(request: str) -> str:
         response = await openai.Image.acreate(
             prompt=request,
             n=1,
             size='512x512'
+        )
+        return response['data'][0]['url']
+
+    @staticmethod
+    async def image_variation(byte_array: bytes) -> str:
+        response = await openai.Image.acreate_variation(
+            image=byte_array,
+            n=1,
+            size="512x512"
+        )
+        return response['data'][0]['url']
+
+    @staticmethod
+    async def image_edit(byte_array: bytes, text: str) -> str:
+        response = await openai.Image.acreate_edit(
+            image=byte_array,
+            prompt=text,
+            n=1,
+            size="512x512"
         )
         return response['data'][0]['url']

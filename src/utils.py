@@ -1,5 +1,7 @@
+from io import BytesIO
 from uuid import uuid4
 
+from PIL import Image
 from aiohttp import ClientSession
 from pydub import AudioSegment
 
@@ -19,3 +21,36 @@ async def load_image(url: str) -> str:
     with open(path, 'wb') as f:
         f.write(data)
     return path
+
+
+def has_transparency(img: Image) -> bool:
+    if img.info.get("transparency", None) is not None:
+        return True
+    if img.mode == "P":
+        transparent = img.info.get("transparency", -1)
+        for _, index in img.getcolors():
+            if index == transparent:
+                return True
+    elif img.mode == "RGBA":
+        extrema = img.getextrema()
+        if extrema[3][0] < 255:
+            return True
+    return False
+
+
+def convert_image(path: str) -> bytes:
+    image = Image.open(path)
+    width, height = 512, 512
+    image = image.convert("RGBA").resize((width, height))
+
+    pixels_data = image.load()
+    width, height = image.size
+    for y in range(height):
+        for x in range(width):
+            if pixels_data[x, y] == (255, 255, 255, 255):
+                pixels_data[x, y] = (255, 255, 255, 0)
+
+    byte_stream = BytesIO()
+    image.save(byte_stream, format='PNG')
+    byte_array = byte_stream.getvalue()
+    return byte_array
