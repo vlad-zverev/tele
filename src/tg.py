@@ -26,7 +26,7 @@ class Telegram:
 
     async def talk_with_ai(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str = None):
         await self.send(update, context, 'Let me think...')
-        ai_response = await self.ai.complete(f'{text}?' or update.message.text)
+        ai_response = await self.ai.complete(f'{text}?' if text else update.message.text)
         await self.send(update, context, ai_response)
 
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
