@@ -25,7 +25,7 @@ class AI:
         except OpenAIError as e:
             return e.error
         completion = response['choices'][0]['text']
-        logging.info(f'ChatGPT completion:\n{completion}')
+        logging.info(f'ChatGPT completion: {completion}')
         return completion
 
     @staticmethod
