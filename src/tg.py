@@ -2,9 +2,10 @@ import asyncio
 import logging
 from uuid import uuid4
 
+from gtts import gTTS
 import openai
 from speech_recognition import Recognizer, AudioFile, UnknownValueError
-from telegram import Update, File, Message, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, File, Message, ReplyKeyboardMarkup, Voice
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 from .ai import AI
@@ -100,8 +101,8 @@ class Telegram:
         state = self.sessions_handler.get_session(update.effective_chat.id)
         if state['state'] == State.CONVERSATION.value:
             msg = state['data']['dialogue'][-500:] + f'\n{msg}'
-        greeting = await self.send(update, context, 'дай подумать...')
-        sticker = await context.bot.send_sticker(update.effective_chat.id, self.thinking_sticker)
+        greeting = await self.send(update, context, 'дай подумать...', disable_notification=True)
+        sticker = await context.bot.send_sticker(update.effective_chat.id, self.thinking_sticker, disable_notification=True)
         ai_response, url = await asyncio.gather(
             self.ai.complete(msg),
             self.ai.image(request=msg),
@@ -119,6 +120,15 @@ class Telegram:
             await context.bot.send_photo(update.effective_chat.id, url)
         elif isinstance(url, openai.ErrorObject):
             await self.send(update, context, str(url))
+        path = f"voices/speech-{uuid4()}.ogg"
+        speech = gTTS(text=ai_response, lang='ru')
+        speech.save(path)
+        await context.bot.send_voice(
+            chat_id=update.message.chat_id,
+            voice=open(path, 'rb'),
+            duration=60,
+            disable_notification=True,
+        )
 
     async def handle_voice(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         path = f'voices/voice-{uuid4()}.ogg'
@@ -129,7 +139,7 @@ class Telegram:
             audio = self.recognizer.record(source)
         try:
             text = self.recognizer.recognize_google(audio, language='ru-RU')
-            await self.send(update, context, f'так, ты только что сказал:\n\n{text}')
+            await self.send(update, context, f'так, ты только что сказал:\n\n{text}', disable_notification=True)
             await self.talk_with_ai(update, context, text)
         except UnknownValueError:
             await self.send(update, context, 'что ты сказал?\nне понял, повтори, плиз')
@@ -144,10 +154,15 @@ class Telegram:
     async def send(
             update: Update, context: ContextTypes.DEFAULT_TYPE,
             response: str, keyboard: ReplyKeyboardMarkup = None,
+            disable_notification: bool = None,
     ) -> Message:
         if not keyboard:
-            keyboard = ReplyKeyboardMarkup([['забудь всё']])
-        return await context.bot.send_message(update.effective_chat.id, response, reply_markup=keyboard)
+            keyboard = ReplyKeyboardMarkup([['забудь всё']], one_time_keyboard=True, resize_keyboard=True)
+        return await context.bot.send_message(
+            update.effective_chat.id, response,
+            reply_markup=keyboard,
+            disable_notification=disable_notification,
+        )
 
     def run(self):
         self.bot.run_polling()
