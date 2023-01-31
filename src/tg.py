@@ -157,7 +157,7 @@ class Telegram:
             disable_notification: bool = None,
     ) -> Message:
         if not keyboard:
-            keyboard = ReplyKeyboardMarkup([['забудь всё']], one_time_keyboard=True, resize_keyboard=True)
+            keyboard = ReplyKeyboardMarkup([['забудь всё']], resize_keyboard=True)
         return await context.bot.send_message(
             update.effective_chat.id, response,
             reply_markup=keyboard,
